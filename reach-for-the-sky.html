@@ -1,0 +1,1978 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script src="https://unpkg.com/tone"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Reach for the Sky</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+
+        body {
+            margin: 0;
+            background-color: #1a1a1a;
+            display: flex;
+            height: 100vh;
+            width: 100vw;
+            font-family: 'VT323', monospace;
+            color: #fff;
+            flex-direction: column;
+            overflow: hidden; /* Prevent scrolling on mobile */
+            justify-content: center;
+            align-items: center;
+        }
+
+        canvas {
+            background-color: #3d3d3d;
+            border: 4px solid #000;
+            /* This is crucial for the pixel-art look */
+            image-rendering: -moz-crisp-edges;
+            image-rendering: -webkit-crisp-edges;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+            display: block; /* Remove extra space below canvas */
+        }
+        
+        #game-container {
+            position: relative; /* Needed for positioning the toggle */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #title-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+        }
+        
+        #title-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        #title-screen h1 {
+            font-size: 4rem;
+            color: #FFFF00;
+            text-shadow: 3px 3px 0 #FF0000;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        #start-button {
+            font-family: 'VT323', monospace;
+            font-size: 2rem;
+            padding: 10px 30px;
+            background-color: #39FF14;
+            color: #000;
+            border: 3px solid #000;
+            cursor: pointer;
+            box-shadow: 3px 3px 0 #111;
+            transition: all 0.1s ease-in-out;
+        }
+
+        #start-button:hover {
+            background-color: #90EE90;
+            transform: translateY(-2px);
+            box-shadow: 5px 5px 0 #111;
+        }
+
+        #start-button:active {
+            transform: translateY(1px);
+            box-shadow: 2px 2px 0 #111;
+        }
+
+
+        #controls {
+            text-align: center;
+        }
+
+        #controls p {
+            margin: 5px 0;
+            font-size: 1.2rem;
+        }
+
+        #controls span {
+            background-color: #000;
+            padding: 4px 8px;
+            border-radius: 4px;
+            border: 2px solid #555;
+            display: inline-block;
+            min-width: 1em; /* Ensure 'A', 'D', 'R' keys look good */
+        }
+        
+        /* --- Mobile Controls --- */
+        #mobile-controls {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none; /* Pass clicks through */
+            display: none; /* Hidden by default */
+            z-index: 20;
+        }
+
+        #joystick-container {
+            position: absolute;
+            bottom: 30px;
+            left: 30px;
+            width: 120px;
+            height: 120px;
+            background: rgba(128, 128, 128, 0.3);
+            border-radius: 50%;
+            pointer-events: auto; /* This element is interactive */
+        }
+
+        #joystick-knob {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            background: rgba(255, 255, 255, 0.4);
+            border-radius: 50%;
+            top: 30px;
+            left: 30px;
+            transition: transform 0.1s;
+        }
+
+        #action-buttons-container {
+            position: absolute;
+            bottom: 30px;
+            right: 30px;
+            display: flex;
+            flex-direction: column-reverse; /* Jump at the bottom */
+            align-items: center;
+            pointer-events: auto;
+        }
+
+        .action-button {
+            width: 70px;
+            height: 70px;
+            background: rgba(128, 128, 128, 0.4);
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.2rem;
+            color: white;
+            margin-top: 15px;
+            user-select: none; /* Prevent text selection on tap */
+            -webkit-user-select: none;
+        }
+
+        .action-button:active {
+            background: rgba(255, 255, 255, 0.5);
+        }
+
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="title-screen">
+            <div id="title-header">
+                <h1>Reach for the Sky!</h1>
+                <button id="start-button">Start</button>
+            </div>
+            <div id="controls">
+                <p><span>&larr;</span> / <span>&rarr;</span> : Move</p>
+                <p><span>&uarr;</span> : Jump</p>
+                <p><span>&darr;</span> : Crouch / Drop</p>
+                <p><span>Spacebar</span> : Build Box</p>
+            </div>
+        </div>
+        <canvas id="gameCanvas"></canvas>
+        <div id="mobile-controls">
+            <div id="joystick-container">
+                <div id="joystick-knob"></div>
+            </div>
+            <div id="action-buttons-container">
+                <div id="build-button" class="action-button">Build</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Disable anti-aliasing to keep pixel art sharp
+        ctx.imageSmoothingEnabled = false;
+        ctx.webkitImageSmoothingEnabled = false;
+        ctx.mozImageSmoothingEnabled = false;
+        ctx.msImageSmoothingEnabled = false;
+
+        // --- Game Configuration ---
+        const SCALE_FACTOR = 4;
+        const NATIVE_WIDTH = 240;
+        const NATIVE_HEIGHT = 160;
+        const GRAVITY = 0.2;
+        const PLAYER_SPEED = 0.8;
+        const JUMP_FORCE = -3.2;
+        
+        // Canvas size is now set dynamically by resizeCanvas()
+        
+        let buildingBlocks = 5;
+        let wasPlacingBox = false;
+        let wasRemoving = false;
+        let wasPressingDown = false;
+
+        // --- Camera and Score ---
+        const camera = { y: 0 };
+        let topHeight = 0;
+        let currentHeight = 0;
+
+        // --- Enemy Setup ---
+        let enemies = [];
+        let maxEnemiesThisWave = 3;
+        let nextSpawnTime = 0;
+        let enemiesSpawned = 0;
+        let waveState = 'calm'; // 'calm' or 'wave'
+        let waveCount = 0;
+        let waveStateTimer = 12000; // Start with a 12-second calm period (in ms)
+        let gameState = 'title'; // 'title', 'playing', 'won'
+        let isMobile = false;
+        
+        // --- Effects Setup ---
+        const particles = [];
+        const backgroundTrees = [];
+        const clouds = [];
+        const stars = [];
+        const planets = [];
+        const auroraParticles = [];
+
+        // --- Player Setup ---
+        const player = {
+            width: 8, // Player's hitbox width in native pixels
+            height: 11, // Player's SPRITE height in native pixels
+            hitboxHeight: 11, // Player's physics hitbox height
+            crouchHitboxHeight: 7, // Player's physics hitbox height when crouching
+            x: NATIVE_WIDTH / 2 - 4,
+            y: NATIVE_HEIGHT - 40,
+            dx: 0, // a.k.a. velocity x
+            dy: 0, // a.k.a. velocity y
+            onGround: false,
+            groundPlatform: null, // The platform the player is standing on
+            facing: 'right', // 'left' or 'right'
+            animation: 'idle',
+            animationFrame: 0,
+            frameCounter: 0,
+            frameDelay: 8, // frames to wait before switching animation frame
+            platformToIgnore: null,
+            peakY: NATIVE_HEIGHT, // Track highest point of a jump
+            isSlamming: false,
+            lastSwayOffset: 0,
+            isKicking: false,
+            kickTimer: 0
+        };
+        
+        // --- Audio Setup ---
+        let audioStarted = false;
+        let soundEnabled = false;
+        let musicInitialized = false;
+        let synths = {}; // Will be initialized on window load
+        let soundCooldowns = {};
+        const SOUND_COOLDOWN_MS = 50; // Prevent re-triggering the same sound for 50ms
+
+
+        async function startAudio() {
+            if (!soundEnabled) return;
+            if (!audioStarted) {
+                await Tone.start();
+                console.log("Audio Context Started");
+                audioStarted = true;
+                
+                // Initialize and start the music sequence on the first user interaction
+                if (!musicInitialized) {
+                    createMusic();
+                    Tone.Transport.start();
+                    musicInitialized = true;
+                }
+            }
+        }
+        
+        function playSound(type, note, duration) {
+            if (!soundEnabled) return;
+
+            const now = Date.now();
+            if (now > (soundCooldowns[type] || 0)) {
+                try {
+                    startAudio();
+                    soundCooldowns[type] = now + SOUND_COOLDOWN_MS;
+                    const synth = synths[type];
+                    if (synth) {
+                        if (note) {
+                            synth.triggerAttackRelease(note, duration);
+                        } else {
+                            // For synths like NoiseSynth that don't take a note
+                            synth.triggerAttackRelease(duration);
+                        }
+                    }
+                } catch (e) {
+                    // Silently ignore Tone.js scheduling errors to prevent game crash.
+                }
+            }
+        }
+
+        function createMusic() {
+            if (!soundEnabled) return;
+
+            // --- Instruments ---
+            const leadSynth = new Tone.Synth({
+                oscillator: { type: 'pulse', width: 0.5 },
+                envelope: { attack: 0.01, decay: 0.15, sustain: 0.2, release: 0.2 },
+                volume: -12 // Lowered volume to let the beat shine
+            }).toDestination();
+
+            const bassSynth = new Tone.MonoSynth({
+                oscillator: { type: 'sawtooth' },
+                filter: { type: 'lowpass', frequency: 600, Q: 2 },
+                envelope: { attack: 0.01, decay: 0.1, sustain: 0, release: 0.2 },
+                volume: -6
+            }).toDestination();
+
+            const kickDrum = new Tone.MembraneSynth({
+                pitchDecay: 0.01,
+                octaves: 6,
+                oscillator: {type: 'sine'},
+                envelope: { attack: 0.001, decay: 0.3, sustain: 0, release: 0.1 },
+                volume: -2 // Made the kick louder and punchier
+            }).toDestination();
+
+            const hiHat = new Tone.MetalSynth({
+                frequency: 250,
+                envelope: { attack: 0.001, decay: 0.05, release: 0.05 },
+                harmonicity: 5.1,
+                modulationIndex: 32,
+                resonance: 3000,
+                octaves: 1.5,
+                volume: -25
+            }).toDestination();
+            
+            // --- Melody and Harmony (Simpler 8-bar loop in C minor) ---
+            const melody = [
+                'C4', 'Eb4', 'G3', 'Eb4', 'C4', null, null, null,
+                'C4', 'Eb4', 'G3', 'Eb4', 'C4', null, null, null,
+                'Ab3', 'C4', 'F3', 'C4', 'Ab3', null, null, null,
+                'G3', null, 'G3', null, 'F3', 'Eb3', 'F3', 'G3'
+            ];
+            
+            const bassline = [
+                'C2', null, 'C2', null, 'C2', null, 'C2', null,
+                'C2', null, 'C2', null, 'C2', null, 'C2', null,
+                'Ab1', null, 'Ab1', null, 'Ab1', null, 'Ab1', null,
+                'G1', null, 'G1', null, 'G1', null, 'G1', null,
+            ];
+
+            // --- Sequences ---
+            new Tone.Sequence((time, note) => {
+                if(note) leadSynth.triggerAttackRelease(note, '8n', time);
+            }, melody, '4n').start(0);
+
+            new Tone.Sequence((time, note) => {
+                if(note) bassSynth.triggerAttackRelease(note, '8n', time);
+            }, bassline, '8n').start(0);
+            
+            // The "techno thumbing" kick on every quarter note
+            new Tone.Loop(time => {
+                kickDrum.triggerAttackRelease('C1', '8n', time);
+            }, '4n').start(0);
+
+            // Open hi-hat on the off-beat
+            new Tone.Loop(time => {
+                hiHat.triggerAttack('16n', time, 0.4);
+            }, '4n').start('8n');
+
+            // --- Global Transport Settings ---
+            Tone.Transport.bpm.value = 140;
+        }
+
+
+        // --- Player Sprite Data ---
+        // --- Helper to mirror sprites ---
+        function mirrorFrame(frame, width) {
+            const mirrored = [];
+            const height = frame.length / width;
+            for (let y = 0; y < height; y++) {
+                for (let x = width - 1; x >= 0; x--) {
+                    mirrored.push(frame[y * width + x]);
+                }
+            }
+            return mirrored;
+        }
+
+        // Define animation frames for facing right
+        const idleFrame = [
+            0,0,5,5,5,5,0,0,
+            0,5,5,5,5,5,5,0,
+            0,2,2,2,2,2,2,0,
+            0,0,2,2,2,2,0,0,
+            0,0,3,3,3,3,0,0,
+            0,4,3,3,3,3,4,0,
+            0,4,3,3,3,3,4,0,
+            0,0,3,3,3,3,0,0,
+            0,0,4,4,4,4,0,0,
+            0,4,4,0,0,4,4,0,
+            4,4,0,0,0,0,4,4,
+        ];
+        const walkFrame1 = [
+            0,0,5,5,5,5,0,0,
+            0,5,5,5,5,5,5,0,
+            0,2,2,2,2,2,2,0,
+            0,0,2,2,2,2,0,0,
+            0,0,3,3,3,3,0,0,
+            0,4,3,3,3,3,4,0,
+            0,4,3,3,3,3,4,0,
+            0,0,3,3,3,3,0,0,
+            0,0,4,4,0,0,0,0,
+            0,4,4,4,4,4,0,0,
+            0,0,0,0,4,4,0,0,
+        ];
+        const walkFrame2 = [
+            0,0,5,5,5,5,0,0,
+            0,5,5,5,5,5,5,0,
+            0,2,2,2,2,2,2,0,
+            0,0,2,2,2,2,0,0,
+            0,0,3,3,3,3,0,0,
+            0,4,3,3,3,3,4,0,
+            0,4,3,3,3,3,4,0,
+            0,0,3,3,3,3,0,0,
+            0,0,0,0,4,4,0,0,
+            0,0,4,4,4,4,4,0,
+            0,0,4,4,0,0,0,0,
+        ];
+        const jumpFrame = [
+            0,0,5,5,5,5,0,0,
+            0,5,5,5,5,5,5,0,
+            0,2,2,2,2,2,2,0,
+            4,0,2,2,2,2,0,4, // Arms up
+            0,4,3,3,3,3,4,0,
+            0,0,3,3,3,3,0,0,
+            0,0,3,3,3,3,0,0,
+            0,0,4,4,4,4,0,0,
+            0,4,0,4,4,0,4,0, // Legs splayed
+            4,0,0,0,0,0,0,4,
+            0,0,0,0,0,0,0,0
+        ];
+        const crouchFrame = [
+            0,0,0,0,0,0,0,0,
+            0,0,0,0,0,0,0,0,
+            0,0,0,0,0,0,0,0,
+            0,0,0,0,0,0,0,0,
+            0,0,5,5,5,5,0,0,
+            0,5,5,5,5,5,5,0,
+            0,2,2,2,2,2,2,0,
+            0,0,3,3,3,3,0,0,
+            0,4,3,3,3,3,4,0,
+            0,4,4,0,0,4,4,0,
+            4,4,0,0,0,0,4,4,
+        ];
+        const crouchWalkFrame = [
+            0,0,0,0,0,0,0,0,
+            0,0,0,0,0,0,0,0,
+            0,0,0,0,0,0,0,0,
+            0,0,0,0,0,0,0,0,
+            0,0,5,5,5,5,0,0,
+            0,5,5,5,5,5,5,0,
+            0,2,2,2,2,2,2,0,
+            0,0,3,3,3,3,0,0,
+            0,4,3,3,3,3,4,0,
+            0,0,4,4,4,0,0,0,
+            0,4,4,0,4,4,0,0,
+        ];
+        const crouchWalkFrame2 = [
+            0,0,0,0,0,0,0,0,
+            0,0,0,0,0,0,0,0,
+            0,0,0,0,0,0,0,0,
+            0,0,0,0,0,0,0,0,
+            0,0,5,5,5,5,0,0,
+            0,5,5,5,5,5,5,0,
+            0,2,2,2,2,2,2,0,
+            0,0,3,3,3,3,0,0,
+            0,4,3,3,3,3,4,0,
+            0,4,4,0,4,4,0,0,
+            0,0,4,4,4,0,0,0,
+        ];
+
+
+        const kickFrame = [
+            0,0,5,5,5,5,0,0,
+            0,5,5,5,5,5,5,0,
+            0,2,2,2,2,2,2,0,
+            0,0,2,2,2,2,0,0,
+            0,0,3,3,3,3,0,0,
+            0,4,3,3,3,3,4,0,
+            0,4,3,3,3,3,4,0,
+            0,0,3,3,3,3,0,0,
+            0,0,4,4,4,4,4,4, // Kicking leg
+            0,4,4,0,0,0,0,0, // Other leg
+            4,4,0,0,0,0,0,0,
+        ];
+
+        const playerSprite = {
+            width: 8,
+            height: 11,
+            colors: {
+                '1': '#6F3A23', // Hair
+                '2': '#F3C6A4', // Skin
+                '3': '#39FF14', // Shirt (Neon Green)
+                '4': '#6A0DAD',  // Pants / Arms (Purple)
+                '5': '#D92A2A' // Red Beanie
+            },
+            animations: {
+                idleRight: [ idleFrame ],
+                walkRight: [ walkFrame1, walkFrame2 ],
+                jumpRight: [ jumpFrame ],
+                crouchRight: [ crouchFrame ],
+                crouchWalkRight: [ crouchWalkFrame, crouchWalkFrame2 ],
+                kickRight: [ kickFrame ],
+                idleLeft: [ mirrorFrame(idleFrame, 8) ],
+                walkLeft: [ mirrorFrame(walkFrame1, 8), mirrorFrame(walkFrame2, 8) ],
+                jumpLeft: [ mirrorFrame(jumpFrame, 8) ],
+                crouchLeft: [ mirrorFrame(crouchFrame, 8) ],
+                crouchWalkLeft: [ mirrorFrame(crouchWalkFrame, 8), mirrorFrame(crouchWalkFrame2, 8) ],
+                kickLeft: [ mirrorFrame(kickFrame, 8) ],
+            }
+        };
+        
+        // --- Termite Sprite Data ---
+        const termiteWalkFrame1 = [
+            0,1,1,1,1,1,1,0,
+            1,2,2,2,2,2,2,1,
+            1,2,1,2,1,2,1,1,
+            1,1,1,1,1,1,1,0,
+            0,1,0,1,0,1,0,0,
+            1,0,1,0,1,0,1,0,
+        ];
+        const termiteWalkFrame2 = [
+            0,1,1,1,1,1,1,0,
+            1,2,2,2,2,2,2,1,
+            1,2,1,2,1,2,1,1,
+            1,1,1,1,1,1,1,0,
+            1,0,1,0,1,0,1,0,
+            0,1,0,1,0,1,0,0,
+        ];
+
+        const termiteSprite = {
+            width: 8,
+            height: 6,
+            colors: {
+                '1': '#8E4A24', // Dark Brown
+                '2': '#D87A3D'  // Orange
+            },
+            animations: {
+                walkRight: [ termiteWalkFrame1, termiteWalkFrame2 ],
+                walkLeft: [ mirrorFrame(termiteWalkFrame1, 8), mirrorFrame(termiteWalkFrame2, 8) ]
+            }
+        };
+
+        // --- Platforms Setup ---
+        const platforms = [
+            { x: 0, y: NATIVE_HEIGHT - 10, width: NATIVE_WIDTH * 2, height: 10, type: 'ground' }, // Ground
+        ];
+        
+        const keys = {
+            left: false,
+            right: false,
+            up: false,
+            down: false,
+            space: false,
+            r: false
+        };
+
+        // --- Input Handling ---
+        function handleKeyDown(e) {
+            if (e.key === 'ArrowLeft') keys.left = true;
+            if (e.key === 'ArrowRight') keys.right = true;
+            if (e.key === 'ArrowUp') keys.up = true;
+            if (e.key === 'ArrowDown') keys.down = true;
+            if (e.key === ' ') keys.space = true;
+            if (e.key === 'r' || e.key === 'R') keys.r = true;
+        }
+
+        function handleKeyUp(e) {
+            if (e.key === 'ArrowLeft') keys.left = false;
+            if (e.key === 'ArrowRight') keys.right = false;
+            if (e.key === 'ArrowUp') keys.up = false;
+            if (e.key === 'ArrowDown') keys.down = false;
+            if (e.key === ' ') keys.space = false;
+            if (e.key === 'r' || e.key === 'R') keys.r = false;
+        }
+
+        document.addEventListener('keydown', handleKeyDown);
+        document.addEventListener('keyup', handleKeyUp);
+        
+        function resetGame() {
+            // Reset player
+            const logicalWidth = canvas.width / SCALE_FACTOR;
+            player.x = logicalWidth / 2 - 4; // Center on current screen
+            player.y = NATIVE_HEIGHT - 40;
+            player.dy = 0;
+            player.dx = 0;
+            player.peakY = NATIVE_HEIGHT;
+            player.isSlamming = false;
+            player.onGround = false;
+
+            // Reset score and camera
+            topHeight = 0;
+            currentHeight = 0;
+            camera.y = NATIVE_HEIGHT - (canvas.height / SCALE_FACTOR);
+
+            // Clear platforms (except ground)
+            platforms.splice(1);
+
+            // Clear enemies and particles
+            enemies.length = 0;
+            particles.length = 0;
+            
+            // Reset wave state
+            waveState = 'calm';
+            waveCount = 0;
+            waveStateTimer = 12000;
+            
+            // Reset blocks
+            buildingBlocks = 5;
+        }
+
+        function setNextSpawnTime() {
+            // Spawn rapidly during a wave: between 0.5 and 1 second
+            nextSpawnTime = Date.now() + 500 + Math.random() * 500;
+        }
+        
+        function spawnEnemy() {
+            if (enemies.length >= maxEnemiesThisWave) return;
+            enemiesSpawned++;
+
+            const side = Math.random() < 0.5 ? 'left' : 'right';
+            const logicalWidth = canvas.width / SCALE_FACTOR;
+
+            const enemy = {
+                width: 8, height: 6,
+                x: side === 'left' ? -8 : logicalWidth, y: NATIVE_HEIGHT - 40,
+                dx: side === 'left' ? 0.24 : -0.24, dy: 0,
+                onGround: false, groundPlatform: null,
+                facing: side === 'left' ? 'right' : 'left',
+                animationFrame: 0, frameCounter: 0, frameDelay: 10,
+                eatCooldown: 0, jumpCooldown: 0,
+                isKicked: false, rotation: 0,
+                isDead: false,
+                isEating: false,
+                eatingTimer: 0,
+                targetBox: null
+            };
+            enemies.push(enemy);
+            setNextSpawnTime();
+        }
+
+        // --- Game Logic ---
+        function updateAurora() {
+            const time = Date.now() / 1000;
+            auroraParticles.forEach(p => {
+                p.x = p.baseX + Math.sin(time * p.speed + p.baseX * 0.1) * p.amplitude;
+                
+                const auroraTop = 120;
+                const auroraBottom = 100;
+                let targetOpacity = 0;
+
+                if (currentHeight > auroraBottom && currentHeight < auroraTop + 20) {
+                     if (currentHeight < (auroraBottom + auroraTop) / 2) {
+                         targetOpacity = (currentHeight - auroraBottom) / ((auroraTop - auroraBottom) / 2);
+                     } else {
+                         targetOpacity = 1 - ((currentHeight - ((auroraBottom + auroraTop) / 2)) / ((auroraTop - auroraBottom) / 2 + 20));
+                     }
+                }
+                
+                p.opacity += (Math.max(0, targetOpacity) - p.opacity) * 0.05;
+                p.color = `hsla(${110 + Math.sin(time * p.speed) * 20}, 100%, 60%, ${p.opacity * 0.4})`;
+            });
+        }
+
+        function update() {
+            if (gameState === 'won') {
+                player.y += player.dy;
+                // Don't update anything else in the win state
+                return;
+            }
+            if (gameState === 'title') {
+                // Don't update game logic on title screen
+                return;
+            }
+
+            updateAurora();
+            runSwayAndCollapseCheck();
+            
+            // --- Wave Management ---
+            waveStateTimer -= 16.67; // approx ms per frame (1000ms / 60fps)
+
+            // If player runs out of blocks during calm, start the next wave soon.
+            if (buildingBlocks === 0 && waveState === 'calm' && waveStateTimer > 1000) {
+                waveStateTimer = 1000; // Trigger next wave in 1 second
+            }
+
+            if (waveStateTimer <= 0) {
+                if (waveState === 'calm') {
+                    waveState = 'wave';
+                    waveStateTimer = 6000; // 6-second wave
+                    waveCount++;
+
+                    // Calculate max enemies for this wave
+                    if (waveCount <= 2) {
+                        maxEnemiesThisWave = 3 + Math.floor(Math.random() * 3); // 3 to 5 termites for the first two waves
+                    } else {
+                        // After wave 2, increase the max number of termites, capping at 20
+                        maxEnemiesThisWave = Math.min(20, 5 + (waveCount - 2)); 
+                    }
+
+                    setNextSpawnTime(); // Schedule the first spawn of the wave
+                } else { // waveState === 'wave'
+                    waveState = 'calm';
+                    let baseCalmTime;
+                    if (topHeight > 100) {
+                        // Random time between 10 and 25 seconds
+                        baseCalmTime = 10000 + Math.random() * 15000;
+                    } else {
+                        baseCalmTime = 12000; // 12 seconds default
+                    }
+
+                    let bonusTime;
+                    if (topHeight <= 50) {
+                        bonusTime = topHeight * 250; // 0.25 seconds per box
+                    } else {
+                        const baseBonus = 50 * 250; // Bonus for the first 50 boxes
+                        const extraBonus = (topHeight - 50) * 300; // 0.3 seconds for each box above 50
+                        bonusTime = baseBonus + extraBonus;
+                    }
+                    waveStateTimer = baseCalmTime + bonusTime;
+                }
+            }
+
+            if (waveState === 'wave' && Date.now() > nextSpawnTime) {
+                spawnEnemy();
+            }
+
+            // --- Ground Slam Logic ---
+            if (!player.onGround && player.y < player.peakY) player.peakY = player.y;
+            if (keys.down && !player.onGround && player.dy > 0) player.isSlamming = true;
+            if (!keys.down && player.isSlamming) player.isSlamming = false;
+
+            if (keys.down && !wasPressingDown && player.onGround && player.groundPlatform?.type === 'box') {
+                player.platformToIgnore = player.groundPlatform;
+                player.onGround = false;
+                player.y += 1; 
+            }
+            wasPressingDown = keys.down;
+
+            if(player.kickTimer > 0) {
+                player.kickTimer--;
+                if(player.kickTimer <= 0) player.isKicking = false;
+            }
+
+            const isCrouching = keys.down && player.onGround;
+            player.hitboxHeight = isCrouching ? player.crouchHitboxHeight : player.height;
+
+            let newAnimation = 'idle';
+            if(player.isKicking) newAnimation = 'kick';
+            else if (!player.onGround) newAnimation = 'jump';
+            else if (isCrouching) newAnimation = (keys.left || keys.right) ? 'crouchWalk' : 'crouch';
+            else if (keys.left || keys.right) newAnimation = 'walk';
+
+            if (player.animation !== newAnimation) {
+                player.animation = newAnimation;
+                player.animationFrame = 0;
+                player.frameCounter = 0;
+            }
+
+            const currentSpeed = isCrouching ? PLAYER_SPEED / 2 : PLAYER_SPEED;
+            if (keys.left) { player.dx = -currentSpeed; player.facing = 'left'; } 
+            else if (keys.right) { player.dx = currentSpeed; player.facing = 'right'; } 
+            else { player.dx = 0; }
+
+            if (keys.up && player.onGround) {
+                if (currentHeight >= 150) {
+                    gameState = 'won';
+                    player.dy = -1;
+                    player.dx = 0;
+                    Tone.Transport.stop();
+                    playSound('win', 'C5', '1n');
+                } else {
+                    player.dy = JUMP_FORCE;
+                    player.onGround = false;
+                    playSound('jump', 'F4', '16n');
+                }
+            }
+
+            // --- Building & Removing ---
+            if (keys.space && buildingBlocks > 0 && !wasPlacingBox && player.onGround && player.groundPlatform) {
+                const boxSize = 15;
+                const support = player.groundPlatform;
+                const playerCenterX = player.x + player.width / 2;
+                const targetX = playerCenterX - (boxSize / 2);
+                const buildTargetY = support.y - boxSize;
+
+                let isOccupied = false;
+                for (const p of platforms) {
+                    if (p.type === 'box' && targetX < p.x + p.width && targetX + boxSize > p.x && buildTargetY < p.y + p.height && buildTargetY + boxSize > p.y) {
+                        isOccupied = true;
+                        break;
+                    }
+                }
+                
+                if (!isOccupied) {
+                    const newBox = { 
+                        x: targetX, y: buildTargetY, 
+                        width: boxSize, height: boxSize, type: 'box',
+                        swayOffset: 0
+                    };
+                    platforms.push(newBox);
+                    buildingBlocks--;
+                    player.y = newBox.y - player.height;
+                    player.dy = 0;
+                    player.groundPlatform = newBox;
+                    playSound('placeBox', 'G4', '16n');
+                }
+            }
+            wasPlacingBox = keys.space;
+
+            player.dy += GRAVITY;
+            if (player.isSlamming) player.dy += 0.6;
+
+            // Cap the falling speed to prevent tunneling through platforms
+            const maxFallSpeed = 12; // A safe value less than box height (15)
+            if (player.dy > maxFallSpeed) {
+                player.dy = maxFallSpeed;
+            }
+
+            player.x += player.dx;
+            player.y += player.dy;
+
+            if (player.platformToIgnore && player.y > player.platformToIgnore.y) {
+                player.platformToIgnore = null;
+            }
+
+            player.frameCounter++;
+            const animationName = player.animation + (player.facing.charAt(0).toUpperCase() + player.facing.slice(1));
+            const animationData = playerSprite.animations[animationName];
+            if (player.frameCounter >= player.frameDelay) {
+                player.frameCounter = 0;
+                player.animationFrame = (player.animationFrame + 1) % animationData.length;
+            }
+            
+            player.onGround = false;
+            player.groundPlatform = null;
+
+            // --- Update Particles ---
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.x += p.dx;
+                p.y += p.dy;
+                p.life--;
+                if(p.type === 'dust') {
+                    p.alpha = Math.max(0, p.life / p.startLife);
+                    p.dy -= 0.01;
+                }
+                if (p.type === 'woodchip') {
+                    p.dy += GRAVITY * 0.5; // Wood chips are affected by gravity
+                }
+                if (p.life <= 0) particles.splice(i, 1);
+            }
+
+            // --- Update Enemies ---
+            const enemiesToRemove = [];
+            for (const enemy of enemies) {
+                if (enemy.isKicked) {
+                    enemy.dy += GRAVITY * 0.8;
+                    enemy.x += enemy.dx;
+                    enemy.y += enemy.dy;
+                    enemy.rotation += enemy.dx * 0.05;
+                    if (enemy.y > NATIVE_HEIGHT + 50) { 
+                        enemiesToRemove.push(enemy);
+                    }
+                    continue;
+                }
+
+                // --- New Eating Logic ---
+                if (enemy.isEating) {
+                    enemy.eatingTimer--;
+                    // Play crunching sound and spawn particles periodically
+                    if (enemy.eatingTimer % 15 === 0) { 
+                        playSound('eatBox', null, '16n');
+                        if (enemy.targetBox) {
+                            spawnWoodChips(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2);
+                        }
+                    }
+                    if (enemy.eatingTimer <= 0) {
+                        if (enemy.targetBox) {
+                            const index = platforms.indexOf(enemy.targetBox);
+                            if (index > -1) {
+                                platforms.splice(index, 1);
+                                runPhysicsCheck();
+                            }
+                        }
+                        enemy.isEating = false;
+                        enemy.targetBox = null;
+                        enemy.eatCooldown = 30; // 0.5 second cooldown after eating
+                        enemy.dx = enemy.facing === 'right' ? 0.24 : -0.24; // Resume moving
+                    }
+                } else { // --- IF NOT EATING, do normal behavior ---
+                    if (enemy.jumpCooldown > 0) enemy.jumpCooldown--;
+
+                    if (enemy.onGround) {
+                        if (enemy.jumpCooldown <= 0 && Math.random() < 0.015) {
+                            enemy.dy = -2.5;
+                            enemy.onGround = false;
+                            enemy.jumpCooldown = 120 + Math.random() * 60;
+                        }
+                    }
+                    
+                    if (enemy.eatCooldown > 0) enemy.eatCooldown--;
+
+                    // Check for boxes to eat
+                    if (enemy.eatCooldown <= 0) {
+                        for(const p of platforms) {
+                            if (p.type !== 'box') continue;
+                            // Check for collision, more or less side-on
+                            const isColliding = enemy.x < p.x + p.width && 
+                                                enemy.x + enemy.width > p.x && 
+                                                enemy.y < p.y + p.height && 
+                                                enemy.y + enemy.height > p.y;
+                            
+                            if (isColliding && Math.abs((enemy.y + enemy.height/2) - (p.y + p.height/2)) < p.height) {
+                                enemy.isEating = true;
+                                enemy.eatingTimer = 60; // 1 second
+                                enemy.targetBox = p;
+                                enemy.dx = 0; // Stop
+                                playSound('eatBox', null, '16n');
+                                break; // Stop checking for other boxes this frame
+                            }
+                        }
+                    }
+
+                    // Only apply movement if not eating
+                    if (!enemy.isEating) {
+                        enemy.dy += GRAVITY;
+                        enemy.x += enemy.dx;
+                        enemy.y += enemy.dy;
+                        
+                        const logicalWidth = canvas.width / SCALE_FACTOR;
+                        if (enemy.x <= 0 && enemy.dx < 0) { enemy.x = 0; enemy.dx *= -1; enemy.facing = 'right'; }
+                        if (enemy.x + enemy.width >= logicalWidth && enemy.dx > 0) { enemy.x = logicalWidth - enemy.width; enemy.dx *= -1; enemy.facing = 'left'; }
+                    }
+                }
+
+                enemy.frameCounter++;
+                if (enemy.frameCounter >= enemy.frameDelay) {
+                    enemy.frameCounter = 0;
+                    enemy.animationFrame = (enemy.animationFrame + 1) % 2;
+                }
+
+                if (enemy.y > NATIVE_HEIGHT + 50) { enemiesToRemove.push(enemy); continue; } 
+                enemy.onGround = false;
+
+                for (const platform of platforms) {
+                    if (enemy.x < platform.x + platform.width && enemy.x + enemy.width > platform.x && enemy.y < platform.y + platform.height && enemy.y + enemy.height > platform.y && enemy.dy >= 0) {
+                        const prevBottom = (enemy.y - enemy.dy) + enemy.height;
+                        if (prevBottom <= platform.y) {
+                            enemy.y = platform.y - enemy.height;
+                            enemy.dy = 0;
+                            enemy.onGround = true;
+                            enemy.groundPlatform = platform;
+                        }
+                    }
+                }
+
+                if (player.x < enemy.x + enemy.width && player.x + player.width > enemy.x && player.y < enemy.y + enemy.height && player.y + player.height > enemy.y) {
+                    const playerPrevBottom = (player.y - player.dy) + player.hitboxHeight;
+                     if (player.dy > 0 && playerPrevBottom <= enemy.y) {
+                        if (player.isSlamming) {
+                            const fallHeight = enemy.y - player.peakY;
+                            if (fallHeight > 15 * 3) {
+                                const slamPlatform = enemy.groundPlatform || platforms.find(p => p.type === 'ground');
+                                executeGroundSlam(slamPlatform);
+                            }
+                            player.isSlamming = false;
+                            player.peakY = NATIVE_HEIGHT;
+                            enemiesToRemove.push(enemy);
+                            const landingPlatform = enemy.groundPlatform || platforms.find(p => p.type === 'ground');
+                            player.y = landingPlatform.y - player.height;
+                            player.dy = 0;
+                            player.onGround = true;
+                            player.groundPlatform = landingPlatform;
+                        } else {
+                            enemiesToRemove.push(enemy);
+                            player.dy = JUMP_FORCE / 2;
+                            playSound('stomp', 'C3', '8n');
+                        }
+                     } else if (!player.isKicking) { // Side collision
+                        player.isKicking = true;
+                        player.kickTimer = 15; // Animation duration
+                        
+                        enemy.isKicked = true;
+                        enemy.onGround = false;
+                        if (buildingBlocks < 10) buildingBlocks++; // Gain a block for kicking an enemy
+                        playSound('kick', null, '16n');
+                        
+                        if (Math.abs(player.dx) > 0) {
+                            enemy.dx = player.facing === 'right' ? 3 : -3;
+                        } else {
+                            enemy.dx = enemy.facing === 'left' ? 3 : -3;
+                        }
+                        enemy.dy = -1.5; // Pop up
+                     }
+                }
+            }
+            
+            // --- Post-loop cleanup ---
+            if (enemiesToRemove.length > 0) {
+                const killedEnemies = enemiesToRemove.filter(e => !e.isKicked);
+                enemies = enemies.filter(e => !enemiesToRemove.includes(e));
+                if(killedEnemies.length > 0){
+                    buildingBlocks = Math.min(10, buildingBlocks + killedEnemies.length);
+                }
+            }
+
+            // Collision detection with platforms
+            const hitboxY = player.y + (player.height - player.hitboxHeight);
+            let bestLandingPlatform = null;
+
+            for (const platform of platforms) {
+                if (platform === player.platformToIgnore) continue;
+
+                const isColliding = player.x < platform.x + platform.width && 
+                                    player.x + player.width > platform.x && 
+                                    hitboxY < platform.y + platform.height && 
+                                    hitboxY + player.hitboxHeight > platform.y;
+                
+                // Check if the player is moving downwards and their previous position was above the platform
+                if (isColliding && player.dy >= 0) {
+                    const prevHitboxBottom = (hitboxY - player.dy) + player.hitboxHeight;
+                    if (prevHitboxBottom <= platform.y + 1) { // Added a 1px tolerance for accuracy
+                        // This is a valid landing candidate. Is it the best one (highest on screen)?
+                        if (!bestLandingPlatform || platform.y < bestLandingPlatform.y) {
+                            bestLandingPlatform = platform;
+                        }
+                    }
+                }
+            }
+
+            // After checking all platforms, apply the landing if a suitable one was found
+            if (bestLandingPlatform) {
+                player.y = bestLandingPlatform.y - player.height;
+                player.dy = 0;
+                player.onGround = true;
+                player.groundPlatform = bestLandingPlatform;
+
+                if (player.isSlamming) {
+                    const fallHeight = bestLandingPlatform.y - player.peakY;
+                    if (fallHeight > 15 * 3) {
+                        executeGroundSlam(bestLandingPlatform);
+                    }
+                    player.isSlamming = false;
+                }
+                player.peakY = NATIVE_HEIGHT;
+            }
+            
+            if (player.onGround && player.groundPlatform && player.groundPlatform.type === 'box') {
+                const currentSway = player.groundPlatform.swayOffset || 0;
+                const swayDifference = currentSway - player.lastSwayOffset;
+                player.x += swayDifference;
+                player.lastSwayOffset = currentSway;
+            } else {
+                player.lastSwayOffset = 0;
+            }
+            
+            currentHeight = Math.max(0, Math.floor((NATIVE_HEIGHT - 10 - player.y) / 15));
+            if (currentHeight > topHeight) {
+                topHeight = currentHeight;
+            }
+            
+            // Camera follow logic
+            const logicalHeight = canvas.height / SCALE_FACTOR;
+            let cameraTargetY = camera.y; 
+            const deadZoneTop = camera.y + logicalHeight * 0.45;
+            const deadZoneBottom = camera.y + logicalHeight * 0.55;
+
+            if (player.y < deadZoneTop) {
+                cameraTargetY = player.y - logicalHeight * 0.45;
+            } else if (player.y > deadZoneBottom) {
+                cameraTargetY = player.y - logicalHeight * 0.55;
+            }
+            
+            let newCameraY = camera.y + (cameraTargetY - camera.y) * 0.08;
+            
+            camera.y = Math.min(NATIVE_HEIGHT - logicalHeight, newCameraY);
+
+            const logicalWidth = canvas.width / SCALE_FACTOR;
+            if (player.x < 0) player.x = 0;
+            if (player.x + player.width > logicalWidth) player.x = logicalWidth - player.width;
+            if (player.y > camera.y + logicalHeight + 50) resetGame();
+
+            // --- Update Clouds ---
+            for (const cloud of clouds) {
+                cloud.x += cloud.dx;
+                // Wrap clouds around using dynamic screen width
+                if (cloud.dx > 0 && cloud.x > logicalWidth + cloud.width) {
+                    cloud.x = -cloud.width - Math.random() * (logicalWidth * 0.5);
+                } else if (cloud.dx < 0 && cloud.x < -cloud.width * 2) {
+                    cloud.x = logicalWidth + Math.random() * (logicalWidth * 0.5);
+                }
+            }
+        }
+        
+        // --- Physics Functions ---
+        
+        function executeGroundSlam(hitPlatform) {
+            playSound('slam', 'C2', '4n');
+
+            const enemiesToSlam = [];
+            const slamLeft = player.x - 30;
+            const slamRight = player.x + player.width + 30;
+            for (const enemy of enemies) {
+                const enemyMidX = enemy.x + enemy.width / 2;
+                if (enemyMidX > slamLeft && enemyMidX < slamRight) {
+                    enemiesToSlam.push(enemy);
+                }
+            }
+
+            if (enemiesToSlam.length > 0) {
+                 enemies = enemies.filter(e => !enemiesToSlam.includes(e));
+                 buildingBlocks = Math.min(10, buildingBlocks + enemiesToSlam.length);
+            }
+
+            spawnLightningEffect(player.x + player.width / 2, hitPlatform.y);
+            spawnDustCloud(player.x + player.width / 2, hitPlatform.y);
+
+            if (hitPlatform.type === 'box' && hitPlatform.swayOffset !== 0) {
+                 const boxes = platforms.filter(p => p.type === 'box');
+                 const structure = new Set();
+                 findConnectedBoxes(hitPlatform, structure, boxes);
+                 for (const box of structure) {
+                     const index = platforms.indexOf(box);
+                     if (index > -1) {
+                         platforms.splice(index, 1);
+                         // No block refund on collapse
+                     }
+                 }
+                 runPhysicsCheck();
+            }
+        }
+        
+        function runPhysicsCheck() {
+            const boxSize = 15;
+            let droppedSomething;
+            const playerSupportPlatform = player.groundPlatform;
+            const originalSupportY = playerSupportPlatform ? playerSupportPlatform.y : null;
+
+            do {
+                droppedSomething = false;
+                const boxes = platforms.filter(p => p.type === 'box');
+                boxes.sort((a, b) => a.y - b.y);
+
+                for (const box of boxes) {
+                    let isSupported = false;
+                    for (const supporter of platforms) {
+                        if (box === supporter) continue;
+                        if ( box.x < supporter.x + supporter.width && box.x + box.width > supporter.x && Math.abs((box.y + box.height) - supporter.y) < 1 ) {
+                            isSupported = true;
+                            break;
+                        }
+                    }
+
+                    if (!isSupported) {
+                        box.y += boxSize;
+                        droppedSomething = true;
+                    }
+                }
+            } while (droppedSomething);
+
+            if (playerSupportPlatform && originalSupportY !== null) {
+                if (platforms.includes(playerSupportPlatform)) {
+                    const yDifference = playerSupportPlatform.y - originalSupportY;
+                    if (yDifference > 0) player.y += yDifference;
+                }
+            }
+            if (player.onGround) player.onGround = false;
+        }
+
+        function findConnectedBoxes(seedBox, structureSet, allBoxes) {
+            const toProcess = [seedBox];
+            structureSet.add(seedBox);
+            const boxSize = seedBox.width;
+
+            while (toProcess.length > 0) {
+                const current = toProcess.shift();
+                for (const other of allBoxes) {
+                    if (structureSet.has(other)) continue;
+                    const horizontalDist = Math.abs((current.x + boxSize / 2) - (other.x + boxSize / 2));
+                    const verticalDist = Math.abs((current.y + boxSize / 2) - (other.y + boxSize / 2));
+                    if (horizontalDist <= boxSize && verticalDist <= boxSize) {
+                        structureSet.add(other);
+                        toProcess.push(other);
+                    }
+                }
+            }
+        }
+
+        function runSwayAndCollapseCheck() {
+            const boxes = platforms.filter(p => p.type === 'box');
+            if (boxes.length === 0) return;
+
+            boxes.forEach(box => {
+                if(box.swayOffset === undefined) box.swayOffset = 0;
+            }); 
+
+            const processed = new Set();
+            const structuresToCollapse = [];
+            const groundPlatform = platforms.find(p => p.type === 'ground');
+
+            for (const box of boxes) {
+                if (processed.has(box)) continue;
+
+                // 1. Identify the full structure connected to the current box
+                const currentStructure = new Set();
+                findConnectedBoxes(box, currentStructure, boxes);
+                currentStructure.forEach(p => processed.add(p));
+
+                if (currentStructure.size === 0) continue;
+                
+                // 2. Find the base of the structure (boxes touching the ground)
+                const structureArray = Array.from(currentStructure);
+                const baseBoxes = structureArray.filter(b => Math.abs((b.y + b.height) - groundPlatform.y) < 1);
+
+                // Only apply sway to grounded towers. Floating ones are handled by physics.
+                if (baseBoxes.length === 0) {
+                    structureArray.forEach(p => p.swayOffset *= 0.9); // Dampen sway for airborne blocks
+                    continue;
+                }
+
+                // 3. Calculate the center of the base vs. the center of the whole structure
+                const baseCenterX = baseBoxes.reduce((sum, b) => sum + b.x + b.width / 2, 0) / baseBoxes.length;
+                const structureCenterX = structureArray.reduce((sum, p) => sum + p.x + p.width / 2, 0) / structureArray.length;
+
+                // 4. Find tower height properties for scaling the effect
+                let topBox = structureArray[0];
+                const bottomY = baseBoxes[0].y;
+                structureArray.forEach(p => {
+                    if (p.y < topBox.y) topBox = p;
+                });
+                const towerHeight = bottomY - topBox.y;
+
+                // 5. The core lean calculation based on the center of mass offset
+                const leanOffset = structureCenterX - baseCenterX;
+
+                structureArray.forEach(p => {
+                    const heightRatio = towerHeight > 0 ? (bottomY - p.y) / towerHeight : 0;
+                    
+                    // The main lean based on the tower's balance
+                    const staticLean = leanOffset * heightRatio;
+                    
+                    // A small, gentle dynamic sway effect, also scaled by height
+                    const dynamicSway = Math.sin(Date.now() / 500 + baseCenterX) * 1.5 * heightRatio;
+
+                    let targetSway = staticLean + dynamicSway;
+                    
+                    // Smoothly move the box to its new sway position
+                    p.swayOffset += (targetSway - p.swayOffset) * 0.05;
+                });
+
+                // 6. Check for collapse condition
+                const topBoxCenterWithSway = topBox.x + topBox.width / 2 + topBox.swayOffset;
+                const horizontalDisplacement = topBoxCenterWithSway - baseCenterX;
+
+                if (Math.abs(horizontalDisplacement) > 25) { // Tower collapses if top leans too far
+                    structuresToCollapse.push(currentStructure);
+                }
+            }
+
+            if (structuresToCollapse.length > 0) {
+                for (const structure of structuresToCollapse) {
+                    playSound('slam', 'A1', '1n');
+                    for (const platform of structure) {
+                        const index = platforms.indexOf(platform);
+                        if (index > -1) {
+                            platforms.splice(index, 1);
+                        }
+                    }
+                }
+                runPhysicsCheck();
+            }
+        }
+        
+        // --- Effects Functions ---
+        function spawnLightningEffect(x, y) {
+            for (let i = 0; i < 15; i++) {
+                particles.push({
+                    x: x, y: y,
+                    dx: (Math.random() - 0.5) * 6,
+                    dy: (Math.random() * -3),
+                    life: 20 + Math.random() * 10,
+                    type: 'lightning',
+                    color: ['#FFFF00', '#FFFFFF', '#9BF6FF'][Math.floor(Math.random() * 3)]
+                });
+            }
+        }
+
+        function spawnDustCloud(x, y) {
+            for (let i = 0; i < 30; i++) {
+                const life = 60 + Math.random() * 40;
+                particles.push({
+                    x: x + (Math.random() - 0.5) * 10,
+                    y: y - Math.random() * 5,
+                    dx: (Math.random() - 0.5) * 1.5,
+                    dy: (Math.random() * -0.5),
+                    startLife: life, life: life,
+                    type: 'dust',
+                    alpha: 1.0,
+                    color: `rgba(142, 110, 84, 1.0)`
+                });
+            }
+        }
+
+        function spawnWoodChips(x, y) {
+            for (let i = 0; i < 5; i++) {
+                particles.push({
+                    x: x,
+                    y: y,
+                    dx: (Math.random() - 0.5) * 2,  // Horizontal spread
+                    dy: (Math.random() * -1.5),     // Pop upwards
+                    life: 30 + Math.random() * 20, // Short lifespan
+                    type: 'woodchip',
+                    color: ['#966F33', '#6F4E37'][Math.floor(Math.random() * 2)] // Use box colors
+                });
+            }
+        }
+
+        // --- Background Generation ---
+        function generateStarsAndPlanets() {
+            // Generate Stars
+            for (let i = 0; i < 200; i++) {
+                stars.push({
+                    x: Math.random() * NATIVE_WIDTH,
+                    y: -(Math.random() * NATIVE_HEIGHT * 20) - (NATIVE_HEIGHT * 10), // Way up in space
+                    size: Math.random() * 1.5,
+                    brightness: 0.5 + Math.random() * 0.5,
+                    twinkleSpeed: Math.random() * 0.05
+                });
+            }
+
+            // Generate a few planets/moons
+            const planetColors = ['#E6E6FA', '#FFD700', '#B0C4DE', '#F08080'];
+            for (let i = 0; i < 3; i++) {
+                planets.push({
+                    x: Math.random() * NATIVE_WIDTH,
+                    y: -(Math.random() * NATIVE_HEIGHT * 15) - (NATIVE_HEIGHT * 12),
+                    radius: 10 + Math.random() * 15,
+                    color: planetColors[Math.floor(Math.random() * planetColors.length)]
+                });
+            }
+        }
+
+        function generateAurora() {
+            const auroraYStart = (100 * 15) + 10;
+            for (let i = 0; i < 150; i++) {
+                auroraParticles.push({
+                    x: Math.random() * NATIVE_WIDTH,
+                    y: NATIVE_HEIGHT - auroraYStart - (Math.random() * 60),
+                    baseX: i * (NATIVE_WIDTH / 150),
+                    height: 20 + Math.random() * 40,
+                    speed: 0.2 + Math.random() * 0.3,
+                    amplitude: Math.random() * 20,
+                    opacity: 0,
+                    color: `hsla(${110 + Math.random() * 40}, 100%, 60%, 0)`
+                });
+            }
+        }
+
+        function generateClouds() {
+            for (let i = 0; i < 15; i++) {
+                // Position clouds from just above the screen up to 5 screens high
+                const y = - (Math.random() * NATIVE_HEIGHT * 5); 
+                const x = Math.random() * NATIVE_WIDTH * 2 - (NATIVE_WIDTH / 2);
+                
+                const cloud = {
+                    x: x,
+                    y: y,
+                    dx: 0.05 + Math.random() * 0.1, // Slow horizontal speed
+                    parts: []
+                };
+
+                const numParts = 3 + Math.floor(Math.random() * 4); // 3 to 6 parts per cloud
+                let totalWidth = 0;
+
+                // Build a cloud from several smaller, overlapping rectangles
+                for (let j = 0; j < numParts; j++) {
+                    const partX = totalWidth + (Math.random() - 0.5) * 5;
+                    const partY = (Math.random() - 0.5) * 4;
+                    const partW = 10 + Math.random() * 15;
+                    const partH = 6 + Math.random() * 8;
+                    totalWidth += partW * 0.7; // Overlap them for a fluffy look
+
+                    cloud.parts.push({
+                        x: partX,
+                        y: partY,
+                        w: Math.floor(partW),
+                        h: Math.floor(partH)
+                    });
+                }
+                cloud.width = totalWidth;
+                clouds.push(cloud);
+            }
+        }
+
+        function generateBackground() {
+            backgroundTrees.length = 0; // Clear array for regeneration
+            const groundLevel = NATIVE_HEIGHT - 10;
+            let attempts = 0; // Failsafe to prevent infinite loops
+            const logicalWidth = canvas.width / SCALE_FACTOR;
+            if (!logicalWidth) return; // Don't run if canvas isn't sized yet
+
+            while (backgroundTrees.length < 3 && attempts < 100) {
+                attempts++;
+
+                // Generate tree properties
+                const x = Math.floor(Math.random() * logicalWidth * 1.5 - logicalWidth * 0.25);
+                const height = NATIVE_HEIGHT / 2.5 + Math.random() * 40;
+                const crownHeight = height * (0.6 + Math.random() * 0.2);
+                const crownWidth = crownHeight * (0.8 + Math.random() * 0.4);
+                const trunkHeight = height - crownHeight;
+                const trunkWidth = crownWidth * (0.15 + Math.random() * 0.1);
+
+                const finalCrownW = Math.floor(crownWidth);
+                const finalCrownH = Math.floor(crownHeight);
+                const finalTrunkH = Math.floor(trunkHeight);
+                const finalHeight = finalCrownH + finalTrunkH;
+                
+                const newTree = {
+                    x: x,
+                    y: groundLevel - finalHeight,
+                    crown: { w: finalCrownW, h: finalCrownH, color1: '#2E8B57', color2: '#3CB371' },
+                    trunk: { w: Math.floor(trunkWidth), h: finalTrunkH, color: '#8B4513' }
+                };
+
+                // Check for overlap with existing trees
+                let isOverlapping = false;
+                for (const existingTree of backgroundTrees) {
+                    if (newTree.x < existingTree.x + existingTree.crown.w &&
+                        newTree.x + newTree.crown.w > existingTree.x) {
+                        isOverlapping = true;
+                        break;
+                    }
+                }
+
+                // If no overlap, add the tree to our background
+                if (!isOverlapping) {
+                    backgroundTrees.push(newTree);
+                }
+            }
+        }
+
+
+        // --- Drawing Functions ---
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.save();
+            ctx.scale(SCALE_FACTOR, SCALE_FACTOR);
+
+            const logicalWidth = canvas.width / SCALE_FACTOR;
+            const logicalHeight = canvas.height / SCALE_FACTOR;
+            
+            // --- WORLD SPACE DRAWING (AFFECTED BY CAMERA) ---
+            ctx.save();
+            ctx.translate(0, -Math.floor(camera.y));
+
+            // --- Dynamic Background ---
+            const atmosphereEndHeight = 120;
+            const skyColor = { r: 92, g: 148, b: 252 }; // #5C94FC
+            const spaceColor = { r: 10, g: 10, b: 25 }; // Dark blue/black
+            let bgColor = `rgb(${skyColor.r}, ${skyColor.g}, ${skyColor.b})`;
+            if (currentHeight > 50) {
+                const transitionProgress = Math.min(1, (currentHeight - 50) / (atmosphereEndHeight - 50));
+                const r = Math.floor(skyColor.r + (spaceColor.r - skyColor.r) * transitionProgress);
+                const g = Math.floor(skyColor.g + (spaceColor.g - skyColor.g) * transitionProgress);
+                const b = Math.floor(skyColor.b + (spaceColor.b - skyColor.b) * transitionProgress);
+                bgColor = `rgb(${r}, ${g}, ${b})`;
+            }
+            if (currentHeight >= atmosphereEndHeight) {
+                bgColor = `rgb(${spaceColor.r}, ${spaceColor.g}, ${spaceColor.b})`;
+            }
+            ctx.fillStyle = bgColor;
+            ctx.fillRect(0, camera.y, logicalWidth, logicalHeight);
+
+            // --- Draw Stars and Planets (if high enough) ---
+            if (currentHeight > 80) {
+                const starOpacity = Math.min(1, (currentHeight - 80) / 40);
+                ctx.globalAlpha = starOpacity;
+
+                for (const planet of planets) {
+                    ctx.fillStyle = planet.color;
+                    ctx.beginPath();
+                    ctx.arc(planet.x, planet.y, planet.radius, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                for (const star of stars) {
+                    const brightness = star.brightness + Math.sin(Date.now() / 1000 * star.twinkleSpeed) * 0.2;
+                    ctx.fillStyle = `rgba(255, 255, 255, ${brightness})`;
+                    ctx.fillRect(star.x, star.y, star.size, star.size);
+                }
+                ctx.globalAlpha = 1.0;
+            }
+
+            // --- Draw Clouds ---
+            const cloudFadeStart = 70;
+            const cloudFadeEnd = 110;
+            let cloudAlpha = 1.0;
+            if (currentHeight > cloudFadeStart) {
+                cloudAlpha = Math.max(0, 1 - (currentHeight - cloudFadeStart) / (cloudFadeEnd - cloudFadeStart));
+            }
+            if (cloudAlpha > 0) {
+                ctx.fillStyle = `rgba(255, 255, 255, ${0.9 * cloudAlpha})`;
+                for (const cloud of clouds) {
+                    for (const part of cloud.parts) {
+                        ctx.fillRect(
+                            Math.floor(cloud.x + part.x),
+                            Math.floor(cloud.y + part.y),
+                            part.w,
+                            part.h
+                        );
+                    }
+                }
+            }
+
+            // --- Draw Aurora ---
+            if (currentHeight > 95 && currentHeight < 140) {
+                for (const p of auroraParticles) {
+                    if (p.opacity > 0) {
+                        ctx.fillStyle = p.color;
+                        ctx.fillRect(p.x, p.y, 2, p.height);
+                    }
+                }
+            }
+
+            // --- Draw Background Trees ---
+            for (const tree of backgroundTrees) {
+                const trunkX = tree.x + (tree.crown.w / 2) - (tree.trunk.w / 2);
+                const trunkY = tree.y + tree.crown.h;
+
+                // Draw trunk first, extend height by 1 to ensure it overlaps with the grass layer
+                ctx.fillStyle = tree.trunk.color;
+                ctx.fillRect(Math.floor(trunkX), Math.floor(trunkY), tree.trunk.w, tree.trunk.h + 1);
+
+                // --- Draw rounded canopy ---
+                const crown = tree.crown;
+                const radiusX = crown.w / 2;
+                const radiusY = crown.h / 2;
+                const centerX = tree.x + radiusX;
+
+                // Draw main body of the canopy (an ellipse)
+                ctx.fillStyle = crown.color1;
+                for (let yOffset = 0; yOffset < crown.h; yOffset++) {
+                    const normalizedY = (yOffset - radiusY) / radiusY;
+                    const halfWidth = radiusX * Math.sqrt(1 - normalizedY * normalizedY);
+                    const startX = centerX - halfWidth;
+                    ctx.fillRect(Math.floor(startX), tree.y + yOffset, Math.ceil(halfWidth * 2), 1);
+                }
+
+                // Draw highlight on top
+                ctx.fillStyle = crown.color2;
+                const highlightRadiusY = radiusY * 0.8;
+                for (let yOffset = 1; yOffset < crown.h / 2; yOffset++) {
+                    const normalizedY = (yOffset - highlightRadiusY) / highlightRadiusY;
+                    if (normalizedY >= 0) continue; 
+                    
+                    const halfWidth = (radiusX - 2) * Math.sqrt(1 - normalizedY * normalizedY);
+                    if (halfWidth > 0) {
+                        const startX = centerX - halfWidth;
+                        ctx.fillRect(Math.floor(startX), tree.y + yOffset, Math.ceil(halfWidth * 2), 1);
+                    }
+                }
+            }
+
+            // --- Draw Platforms ---
+            for (const platform of platforms) {
+                if (platform.type === 'ground') {
+                    ctx.fillStyle = '#6D4C3D';
+                    ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
+                    ctx.fillStyle = '#5A8F4D'; 
+                    ctx.fillRect(platform.x, platform.y, platform.width, 2);
+                } else if (platform.type === 'box') {
+                    const rotationPointX = platform.x + platform.swayOffset + platform.width / 2;
+                    const rotationPointY = platform.y + platform.height;
+                    const rotation = platform.swayOffset * 0.04;
+
+                    ctx.save();
+                    ctx.translate(Math.round(rotationPointX), Math.round(rotationPointY));
+                    ctx.rotate(rotation);
+
+                    const boxWidth = platform.width;
+                    const boxHeight = platform.height;
+                    const boxX = -boxWidth / 2;
+                    const boxY = -boxHeight;
+                    const woodBaseColor = '#966F33';
+                    const woodShadowColor = '#6F4E37';
+
+                    // Draw base color
+                    ctx.fillStyle = woodBaseColor;
+                    ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
+
+                    // Draw top and bottom plank "caps"
+                    ctx.fillStyle = woodShadowColor;
+                    ctx.fillRect(boxX, boxY, boxWidth, 2); // Top cap
+                    ctx.fillRect(boxX, boxY + boxHeight - 2, boxWidth, 2); // Bottom cap
+                    
+                    // Draw vertical plank lines
+                    ctx.strokeStyle = woodShadowColor;
+                    ctx.lineWidth = 1;
+
+                    ctx.beginPath();
+                    const plank1X = boxX + Math.floor(boxWidth / 3);
+                    const plank2X = boxX + Math.floor(boxWidth / 3) * 2;
+                    ctx.moveTo(plank1X, boxY);
+                    ctx.lineTo(plank1X, boxY + boxHeight);
+                    ctx.moveTo(plank2X, boxY);
+                    ctx.lineTo(plank2X, boxY + boxHeight);
+                    ctx.stroke();
+                    
+                    // Draw outline
+                    ctx.strokeStyle = '#4A2511';
+                    ctx.lineWidth = 0.5;
+                    ctx.strokeRect(boxX, boxY, boxWidth, boxHeight);
+
+                    ctx.restore();
+                }
+            }
+            
+            // --- Draw Enemy Indicators ---
+            // Show indicators only when the ground level is scrolled off the bottom of the screen
+            if (camera.y < NATIVE_HEIGHT - logicalHeight - 10) {
+                ctx.fillStyle = 'rgba(255, 0, 0, 0.8)';
+                const indicatorY = camera.y + logicalHeight - 3; // Position at the very bottom of the viewport
+                for (const enemy of enemies) {
+                    const indicatorX = Math.round(enemy.x + enemy.width / 2);
+                    if (indicatorX >= 0 && indicatorX < logicalWidth) { // Only draw if on screen
+                        ctx.fillRect(indicatorX - 1, indicatorY, 3, 3); // Draw a 3x3 square
+                    }
+                }
+            }
+
+            // --- Draw Particles ---
+            for (const p of particles) {
+                if (p.type === 'lightning') {
+                    ctx.fillStyle = p.color;
+                    ctx.fillRect(Math.round(p.x), Math.round(p.y), 2, 2);
+                } else if (p.type === 'dust') {
+                    ctx.fillStyle = `rgba(142, 110, 84, ${p.alpha})`;
+                    ctx.fillRect(Math.round(p.x), Math.round(p.y), 3, 3);
+                } else if (p.type === 'woodchip') {
+                    ctx.fillStyle = p.color;
+                    ctx.fillRect(Math.round(p.x), Math.round(p.y), 1, 1);
+                }
+            }
+
+            if (gameState === 'playing') {
+                for (const enemy of enemies) {
+                    if (enemy.isDead) continue;
+                    const animName = 'walk' + (enemy.facing.charAt(0).toUpperCase() + enemy.facing.slice(1));
+                    const frameData = termiteSprite.animations[animName][enemy.animationFrame];
+
+                    if(enemy.isKicked) {
+                        ctx.save();
+                        const enemyCenterX = Math.round(enemy.x) + enemy.width / 2;
+                        const enemyCenterY = Math.round(enemy.y) + enemy.height / 2;
+                        ctx.translate(enemyCenterX, enemyCenterY);
+                        ctx.rotate(enemy.rotation);
+                        ctx.translate(-enemyCenterX, -enemyCenterY);
+                    }
+
+                    drawPixelFrame(Math.round(enemy.x), Math.round(enemy.y), frameData, termiteSprite);
+
+                    if(enemy.isKicked) {
+                        ctx.restore();
+                    }
+                }
+            }
+
+            // --- Draw Player ---
+            ctx.save();
+            const playerCenterX = Math.round(player.x) + player.width / 2;
+            const playerBaseY = Math.round(player.y) + player.height;
+
+            if (player.onGround && player.groundPlatform && player.groundPlatform.type === 'box') {
+                const rotation = player.groundPlatform.swayOffset * 0.04;
+                ctx.translate(playerCenterX, playerBaseY);
+                ctx.rotate(rotation);
+                ctx.translate(-playerCenterX, -playerBaseY);
+            }
+
+            const animationName = player.animation + (player.facing.charAt(0).toUpperCase() + player.facing.slice(1));
+            const frameData = playerSprite.animations[animationName][player.animationFrame];
+            drawPixelFrame(Math.round(player.x), Math.round(player.y), frameData, playerSprite);
+            ctx.restore();
+
+            // --- END OF WORLD SPACE DRAWING ---
+            ctx.restore();
+
+            // --- UI & MESSAGES (DRAWN IN SCALED SCREEN SPACE, NOT AFFECTED BY CAMERA) ---
+            if (gameState === 'playing') {
+                ctx.font = "5px 'VT323'"; // Small font size, will be scaled up
+                ctx.fillStyle = "white";
+                ctx.fillText(`Blocks: ${buildingBlocks}`, 3, 6);
+                
+                const heightText = `Height: ${currentHeight}`;
+                const topHeightText = `Top: ${topHeight}`;
+                const heightTextWidth = ctx.measureText(heightText).width;
+                const topHeightTextWidth = ctx.measureText(topHeightText).width;
+
+                ctx.fillText(heightText, logicalWidth - heightTextWidth - 3, 6);
+                ctx.fillText(topHeightText, logicalWidth - topHeightTextWidth - 3, 12);
+            }
+
+            if (gameState === 'won') {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                ctx.fillRect(0, 0, logicalWidth, logicalHeight);
+
+                const lineHeight = 12;
+                ctx.font = `12px 'VT323'`;
+                ctx.fillStyle = '#FFFF00';
+                ctx.textAlign = 'center';
+
+                ctx.fillText('You managed to escape', logicalWidth / 2, logicalHeight / 2 - (lineHeight / 2));
+                ctx.fillText('from this planet!', logicalWidth / 2, logicalHeight / 2 + (lineHeight / 2));
+                
+                ctx.font = `7px 'VT323'`;
+                ctx.fillStyle = 'white';
+                ctx.fillText('Congratulations!', logicalWidth / 2, logicalHeight / 2 + (lineHeight / 2) + 12);
+            }
+
+            ctx.restore(); // Restore from scaling
+        }
+        
+        // This function was missing
+        function drawPixelFrame(x, y, frameData, spriteInfo) {
+            for (let i = 0; i < frameData.length; i++) {
+                if (frameData[i] !== 0) {
+                    ctx.fillStyle = spriteInfo.colors[frameData[i]];
+                    const px = x + (i % spriteInfo.width);
+                    const py = y + Math.floor(i / spriteInfo.width);
+                    ctx.fillRect(px, py, 1, 1);
+                }
+            }
+        }
+
+        // --- Main Game Loop ---
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+
+            // Re-apply smoothing settings as context can be reset on resize
+            ctx.imageSmoothingEnabled = false;
+            ctx.webkitImageSmoothingEnabled = false;
+            ctx.mozImageSmoothingEnabled = false;
+            ctx.msImageSmoothingEnabled = false;
+
+            if (platforms[0]) {
+                platforms[0].width = canvas.width / SCALE_FACTOR;
+            }
+            if (gameState !== 'title') {
+                camera.y = Math.min(camera.y, NATIVE_HEIGHT - canvas.height / SCALE_FACTOR);
+            } else {
+                camera.y = NATIVE_HEIGHT - canvas.height / SCALE_FACTOR;
+            }
+
+            generateBackground(); // Regenerate trees for new width
+        }
+        
+        function setupMobileControls() {
+            isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+            if (!isMobile) return;
+
+            document.getElementById('controls').style.display = 'none';
+
+            const joystickContainer = document.getElementById('joystick-container');
+            const joystickKnob = document.getElementById('joystick-knob');
+            const buildButton = document.getElementById('build-button');
+
+            let joystick = {
+                active: false,
+                touchId: null,
+                startX: 0,
+                startY: 0,
+                threshold: 15,
+                verticalThreshold: 30
+            };
+
+            joystickContainer.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                if (joystick.active) return;
+                const touch = e.changedTouches[0];
+                joystick.active = true;
+                joystick.touchId = touch.identifier;
+                joystick.startX = touch.clientX;
+                joystick.startY = touch.clientY;
+            }, { passive: false });
+
+            joystickContainer.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+                if (!joystick.active) return;
+                
+                let touch;
+                for (let i = 0; i < e.changedTouches.length; i++) {
+                    if (e.changedTouches[i].identifier === joystick.touchId) {
+                        touch = e.changedTouches[i];
+                        break;
+                    }
+                }
+                if (!touch) return;
+                
+                const deltaX = touch.clientX - joystick.startX;
+                const deltaY = touch.clientY - joystick.startY;
+
+                const maxMove = joystickContainer.clientWidth / 2 - joystickKnob.clientWidth / 4;
+                const clampedX = Math.max(-maxMove, Math.min(maxMove, deltaX));
+                const clampedY = Math.max(-maxMove, Math.min(maxMove, deltaY));
+
+                joystickKnob.style.transform = `translate(${clampedX}px, ${clampedY}px)`;
+                
+                // Horizontal movement
+                if (deltaX > joystick.threshold) {
+                    keys.right = true;
+                    keys.left = false;
+                } else if (deltaX < -joystick.threshold) {
+                    keys.left = true;
+                    keys.right = false;
+                } else {
+                    keys.left = false;
+                    keys.right = false;
+                }
+
+                // Vertical movement for jump/crouch
+                if (deltaY < -joystick.verticalThreshold) {
+                    keys.up = true;
+                    keys.down = false;
+                } else if (deltaY > joystick.verticalThreshold) {
+                    keys.down = true;
+                    keys.up = false;
+                } else {
+                    keys.up = false;
+                    keys.down = false;
+                }
+            }, { passive: false });
+
+            const endJoystick = (e) => {
+                if (!joystick.active) return;
+                let touchFound = false;
+                for (let i = 0; i < e.changedTouches.length; i++) {
+                    if (e.changedTouches[i].identifier === joystick.touchId) {
+                        touchFound = true;
+                        break;
+                    }
+                }
+                if (!touchFound) return;
+                
+                joystick.active = false;
+                joystick.touchId = null;
+                keys.left = false;
+                keys.right = false;
+                keys.down = false;
+                keys.up = false;
+                joystickKnob.style.transform = `translate(0px, 0px)`;
+            };
+            
+            joystickContainer.addEventListener('touchend', endJoystick);
+            joystickContainer.addEventListener('touchcancel', endJoystick);
+
+            // Action Buttons
+            const setupButton = (element, key) => {
+                element.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    keys[key] = true;
+                }, { passive: false });
+                element.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    keys[key] = false;
+                }, { passive: false });
+            };
+
+            setupButton(buildButton, 'space');
+        }
+
+        window.onload = function() {
+            const startButton = document.getElementById('start-button');
+            const titleScreen = document.getElementById('title-screen');
+
+            startButton.addEventListener('click', () => {
+                titleScreen.style.display = 'none';
+                gameState = 'playing';
+                if (isMobile) {
+                    document.getElementById('mobile-controls').style.display = 'block';
+                }
+                resetGame();
+                startAudio();
+            });
+
+            // Check if Tone.js is loaded. If not, there's a network issue.
+            if (typeof Tone !== 'undefined') {
+                 try {
+                    // Initialize synths now that Tone.js is loaded
+                    synths = {
+                        jump: new Tone.Synth({ oscillator: { type: 'sine' }, envelope: { attack: 0.01, decay: 0.2, sustain: 0, release: 0.1 } }).toDestination(),
+                        placeBox: new Tone.Synth({ oscillator: { type: 'sine' }, envelope: { attack: 0.01, decay: 0.2, sustain: 0.1, release: 0.1 } }).toDestination(),
+                        stomp: new Tone.MembraneSynth({ pitchDecay: 0.1, octaves: 4, envelope: { attack: 0.001, decay: 0.3, sustain: 0.01, release: 0.1 } }).toDestination(),
+                        kick: new Tone.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.001, decay: 0.1, sustain: 0 } }).toDestination(),
+                        slam: new Tone.MembraneSynth({ pitchDecay: 0.2, octaves: 8, envelope: { attack: 0.01, decay: 0.5, sustain: 0.01, release: 0.3 } }).toDestination(),
+                        win: new Tone.Synth({ oscillator: {type: 'triangle'}, envelope: { attack: 0.1, decay: 0.5, sustain: 0.8, release: 2 }, volume: -5 }).toDestination(),
+                        eatBox: new Tone.MetalSynth({
+                            frequency: 100,
+                            envelope: { attack: 0.001, decay: 0.1, release: 0.1 },
+                            harmonicity: 8.5,
+                            modulationIndex: 20,
+                            resonance: 1500,
+                            octaves: 0.5
+                        }).toDestination()
+                    };
+                    synths.stomp.volume.value = -6;
+                    synths.slam.volume.value = -3;
+                    synths.kick.volume.value = -12;
+                    synths.eatBox.volume.value = -10;
+                    soundEnabled = true;
+                } catch (e) {
+                    console.error("Error initializing Tone.js. Sound will be disabled.", e);
+                    soundEnabled = false;
+                }
+            } else {
+                 console.error("Tone.js failed to load. Sound will be disabled.");
+                 soundEnabled = false;
+            }
+            
+            setupMobileControls();
+            
+            // Set initial size and listen for changes
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
+
+            // Generate initial assets
+            generateStarsAndPlanets();
+            generateAurora();
+            generateClouds();
+
+            gameLoop();
+        };
+
+    </script>
+</body>
+</html>
+
+
