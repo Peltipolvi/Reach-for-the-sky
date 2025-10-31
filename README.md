@@ -1,4 +1,4 @@
-# Reach-for-the-sky
+# Reach-for-the-sky ( https://peltipolvi.github.io/Reach-for-the-sky/reach-for-the-sky.html )
 
 Reach for the sky is a game made almost entirely with Gemini, where you have to build a tower as high as possible and protect it from termites. The task is complicated by the swaying of the tower and the termites that try to eat the tower's foundations. This was an experiment to see how well you could actually make a really small game with artificial intelligence. I think the game turned out pretty decent considering the time spent (approx. 6h), but I wouldn't make entire programs solely with artificial intelligence. It does help, and sometimes you can quickly create at least a code example for a simple and limited problem. In larger tasks, the end result may be something completely different from what you had imagined.
 
