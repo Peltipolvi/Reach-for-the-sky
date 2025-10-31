@@ -1,2 +1,11 @@
 # Reach-for-the-sky
-Google's Gemini testing: Small game
+
+Reach for the sky is a game made almost entirely with Gemini, where you have to build a tower as high as possible and protect it from termites. The task is complicated by the swaying of the tower and the termites that try to eat the tower's foundations. This was an experiment to see how well you could actually make a really small game with artificial intelligence. I think the game turned out pretty decent considering the time spent (approx. 6h), but I wouldn't make entire programs solely with artificial intelligence. It does help, and sometimes you can quickly create at least a code example for a simple and limited problem. In larger tasks, the end result may be something completely different from what you had imagined.
+
+For example, I'm still not happy with the tower's swaying but it's good enough for this experiment. Gemini also made a lot of "beginner" mistakes, especially with collision detection. And even though I asked for these to be taken into account, most of them still seemed to go wrong and were fixed only after spesific request. Also, these fixes sometimes seemed to break some other functionality or the AI ​​itself came up with some unnecessary improvements. Undo, rererequest, undo, frustration, maybe I should code this by myself?
+
+As the amount of code increased, Gemini also started to mess up more and sometimes the end result was just a piece of text "Immersive content redacted for brevity." Which is apparently due to running out of memory. At the same time, the codes and everything were lost. Fortunately, by printing them to the chat, I was able to save the code and start a new conversation. After that, I copied and saved the code before each command.
+
+Adding sounds appeared to be a problematic task. I asked Gemini to add sound effects for various actions and make a theme song. I didn't specify what should be used, so Gemini chose the tune.js library to generate the sounds. Gemini kept trying to download the library from the wrong address, and even though I told it where it was (had to look from documents) and that it should be downloaded first so that it would be available in the application, it didn't work. I fixed it manually.
+
+Gemini surprised me one last time when I returned from a short break. It greeted me cheerfully and introduced the "game tips" section it had developed and the integration with Gemini's app for analyzing game performance. At this point, I stopped working and reverted to the previous version, it's good enough.
